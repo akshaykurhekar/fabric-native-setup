@@ -1,42 +1,9 @@
-# Test network - Nano bash
-
-Test network Nano bash provides a set of minimal bash scripts to run a Fabric network on your local machine.
-The network is functionally equivalent to the docker-based Test Network, you can therefore run all the tutorials and samples that target the Test Network with minimal changes.
-The Fabric release binaries are utilized rather than using docker containers to avoid all unnecessary layers. And you can choose between running the chaincode and chaincode builder in a docker container behind the scenes or running the chaincode as a service without any containers at all.
-Using the Fabric binaries also makes it simple for Fabric developers to iteratively and quickly modify Fabric code and test a Fabric network as a user.
-
-As the name `nano` implies, the scripts provide the smallest minimal setup possible for a Fabric network while still offering a multi-node TLS-enabled network:
-- Minimal set of dependencies
-- Minimal requirements on Fabric version (any v2.x orderer and peer nodes should work)
-- Minimal set of environment variable overrides of the default orderer orderer.yaml and peer core.yaml configurations
-- Minimal scripting with minimal set of reference commands to get a Fabric network up and running
-- Minimal channel configuration for an orderer organization (3 ordering nodes) and two peer organizations (with two peers each)
-- Minimal endorsement policy to allow a single organization to approve and commit a chaincode (unlike Test Network which requires both organizations to endorse)
+# Test network - Fabric native setup
 
 # Prereqs
 
 - Follow the Fabric documentation for the [Prereqs](https://hyperledger-fabric.readthedocs.io/en/latest/prereqs.html)
 - Follow the Fabric documentation for [downloading the Fabric samples and binaries](https://hyperledger-fabric.readthedocs.io/en/latest/install.html). You can skip the docker image downloads by using `./install-fabric.sh binary samples`
-
-## To run the chaincode as a service
-You need to configure the peer to use the `ccaas` external builder downloaded with the binaries above.
-The path specified in the default config file is only valid within the peer container which you won't be using.
-Edit the `fabric-samples/config/core.yaml` file and modify the `externalBuilders` field to point to the correct path.
-The configuration should look something like the following:
-
-```yaml
-externalBuilders:
-  - name: ccaas_builder
-    path: /Users/nanofab/fabric-samples/builders/ccaas
-    propagateEnvironment:
-      - CHAINCODE_AS_A_SERVICE_BUILDER_CONFIG
-```
-
-If you have [yq](https://mikefarah.gitbook.io/yq/) installed, run the following command in the `fabric-samples` directory to update the configuration:
-
-```shell
-yq -i 'del(.chaincode.externalBuilders) | .chaincode.externalBuilders[0].name = "ccaas_builder" | .chaincode.externalBuilders[0].path = env(PWD) + "/builders/ccaas" | .chaincode.externalBuilders[0].propagateEnvironment[0] = "CHAINCODE_AS_A_SERVICE_BUILDER_CONFIG"' config/core.yaml
-```
 
 # Instructions for starting network
 ## Running each component separately
@@ -80,31 +47,14 @@ For example to run against peer1, use:
 ```shell
 source peer1admin.sh
 ```
-
-# Instructions for deploying and running the basic asset transfer sample chaincode
-
-To deploy and invoke the chaincode, utilize the peer1 admin terminal that you have created in the prior steps. You have two possibilities:
-
-1. Using a chaincode container
-2. Running the chaincode as a service
-
-For your convenience you can run `install&approve&commit_chaincode_peer1.sh` from peer1admin terminal to run basic chaincode as a container and activate it. The output of the script is redirected to the logs folder.
-
 ## 1. Using a chaincode container
 
 Package and install the chaincode on peer1:
 
 ```shell
-peer lifecycle chaincode package basic.tar.gz --path ../asset-transfer-basic/chaincode-go --lang golang --label basic_1
+peer lifecycle chaincode package chaincode1.tar.gz --path ./chaincode-go --lang golang --label chaincode1_1
 
-peer lifecycle chaincode install basic.tar.gz
-```
-############  Updated - Package Chaincode ###############
-
-```shell
-peer lifecycle chaincode package basic.tar.gz --path ./chaincode-go --lang golang --label basic_1
-
-peer lifecycle chaincode install basic.tar.gz
+peer lifecycle chaincode install chaincode1.tar.gz
 ```
 
 The chaincode install may take a minute since the `fabric-ccenv` chaincode builder docker image will be downloaded if not already available on your machine.
@@ -113,52 +63,6 @@ Copy the returned chaincode package ID into a `CHAINCODE_ID` environment variabl
 
 ```shell
 export CHAINCODE_ID=$(peer lifecycle chaincode calculatepackageid basic.tar.gz) && echo $CHAINCODE_ID
-```
-
-## 2. Running the chaincode as a service
-
-Package and install the external chaincode on peer1 with the following simple commands:
-
-```shell
-cd chaincode-external
-
-tar cfz code.tar.gz connection.json
-tar cfz external-chaincode.tgz metadata.json code.tar.gz
-
-cd ..
-
-peer lifecycle chaincode install chaincode-external/external-chaincode.tgz
-```
-
-Set the CHAINCODE_ID environment variable for use in subsequent commands:
-
-```shell
-export CHAINCODE_ID=$(peer lifecycle chaincode calculatepackageid chaincode-external/external-chaincode.tgz) && echo $CHAINCODE_ID
-```
-
-In another terminal, navigate to `fabric-samples/asset-transfer-basic/chaincode-typescript` and build the chaincode:
-
-```shell
-npm install
-npm run build
-```
-
-Set the chaincode package ID again (this is a different terminal):
-
-```shell
-export CHAINCODE_ID=$(peer lifecycle chaincode calculatepackageid ../../test-network-nano-bash/chaincode-external/external-chaincode.tgz) && echo $CHAINCODE_ID
-```
-
-Set the chaincode server address:
-
-```shell
-export CHAINCODE_SERVER_ADDRESS=127.0.0.1:9999
-```
-
-And start the chaincode service:
-
-```shell
-npm run start:server-nontls
 ```
 
 ## Activate the chaincode
@@ -177,18 +81,6 @@ You will also need to rerun the `peer lifecycle chaincode approveformyorg` comma
 
 ## Interact with the chaincode
 
-Invoke the chaincode to create an asset (only a single endorser is required based on the default endorsement policy of any organization).
-Then query the asset, update it, and query again to see the resulting asset changes on the ledger. Note that you need to wait a bit for invoke transactions to complete.
-
-```shell
-peer chaincode invoke -o 127.0.0.1:6050 -C mychannel -n basic -c '{"Args":["CreateAsset","1","blue","35","tom","1000"]}' --waitForEvent --tls --cafile "${PWD}"/crypto-config/ordererOrganizations/example.com/orderers/orderer.example.com/tls/ca.crt
-
-peer chaincode query -C mychannel -n basic -c '{"Args":["ReadAsset","1"]}'
-
-peer chaincode invoke -o 127.0.0.1:6050 -C mychannel -n basic -c '{"Args":["UpdateAsset","1","blue","35","jerry","1000"]}' --waitForEvent --tls --cafile "${PWD}"/crypto-config/ordererOrganizations/example.com/orderers/orderer.example.com/tls/ca.crt
-
-peer chaincode query -C mychannel -n basic -c '{"Args":["ReadAsset","1"]}'
-```
 For your convenience you can run `chaincode_interaction.sh` from peer1admin terminal to make this simple transaction. The ouput of the script is redirected to the logs folder.\
 Congratulations, you have deployed a minimal Fabric network! Inspect the scripts if you would like to see the minimal set of commands that were required to deploy the network.
 
