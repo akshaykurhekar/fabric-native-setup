@@ -1,0 +1,6 @@
+=============== Jun 16, 2023 (IST) ===============
+10:26:37.583999 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+10:26:37.999237 db@open opening
+10:26:37.999925 version@stat F·[] S·0B[] Sc·[]
+10:26:38.060996 db@janitor F·2 G·0
+10:26:38.061083 db@open done T·61.791699ms
